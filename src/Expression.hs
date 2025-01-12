@@ -11,10 +11,8 @@ where
 
 import Control.Exception (throw)
 import Control.Exception.Base (Exception)
-import Control.Monad
 import qualified Control.Monad.Combinators.Expr as E
 import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Void
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
