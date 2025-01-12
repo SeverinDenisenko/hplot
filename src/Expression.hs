@@ -5,6 +5,7 @@ module Expression
   ( Expression (..),
     evalExpression,
     parseExpression,
+    evalFunction
   )
 where
 
@@ -20,8 +21,8 @@ import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
 data Expression a
-  = Val a
-  | Var String
+  = Value a
+  | Variable String
   | Add (Expression a) (Expression a)
   | Subtract (Expression a) (Expression a)
   | Multyply (Expression a) (Expression a)
@@ -31,8 +32,8 @@ data Expression a
   | Power (Expression a) (Expression a)
 
 evalExpression :: (Floating a) => Expression a -> a
-evalExpression (Var _) = 0 -- todo
-evalExpression (Val x) = x
+evalExpression (Variable _) = 0 -- todo
+evalExpression (Value x) = x
 evalExpression (Negative x) = -(evalExpression x)
 evalExpression (Identical x) = evalExpression x
 evalExpression (Add x y) = evalExpression x + evalExpression y
@@ -41,9 +42,32 @@ evalExpression (Multyply x y) = evalExpression x * evalExpression y
 evalExpression (Divide x y) = evalExpression x / evalExpression y
 evalExpression (Power x y) = evalExpression x ** evalExpression y
 
+data EvaluationException = EvaluationException deriving (Show)
+
+instance Exception EvaluationException
+
+getVariable :: String -> [(String,a)] -> a
+getVariable n m = do
+  let filtered = filter (\(x, _) -> x == n) m 
+  if null filtered then
+    throw EvaluationException
+  else
+    snd (head filtered)
+
+evalFunction :: (Floating a) => Expression a -> [(String,a)] -> a
+evalFunction (Variable n) m = getVariable n m
+evalFunction (Value x) _ = x
+evalFunction (Negative x) m = -(evalFunction x m)
+evalFunction (Identical x) m = evalFunction x m
+evalFunction (Add x y) m = (evalFunction x m) + (evalFunction y m)
+evalFunction (Subtract x y) m = (evalFunction x m) - (evalFunction y m)
+evalFunction (Multyply x y) m = (evalFunction x m) * (evalFunction y m)
+evalFunction (Divide x y) m = (evalFunction x m) / (evalFunction y m)
+evalFunction (Power x y) m = (evalFunction x m) ** (evalFunction y m)
+
 instance (Show a) => Show (Expression a) where
-  show (Val x) = show x
-  show (Var n) = show n
+  show (Value x) = show x
+  show (Variable n) = n
   show (Negative x) = "-" ++ show x
   show (Identical x) = show x
   show (Add x y) = "(" ++ show x ++ " + " ++ show y ++ ")"
@@ -76,12 +100,12 @@ double = lexeme L.float
 
 pVariable :: Parser ExprD
 pVariable =
-  Var
+  Variable
     <$> lexeme
       ((:) <$> letterChar <*> many alphaNumChar <?> "variable")
 
 pDouble :: Parser ExprD
-pDouble = Val <$> lexeme double
+pDouble = Value <$> lexeme double
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
