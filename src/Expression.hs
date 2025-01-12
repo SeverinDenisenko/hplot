@@ -4,10 +4,12 @@
 module Expression
   ( Expression (..),
     evalExpression,
-    parceExpression,
+    parseExpression,
   )
 where
 
+import Control.Exception (throw)
+import Control.Exception.Base (Exception)
 import Control.Monad
 import qualified Control.Monad.Combinators.Expr as E
 import Data.Text (Text)
@@ -17,48 +19,38 @@ import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-infixl 6 :+:
-
-infixl 6 :-:
-
-infixl 7 :*:
-
-infixl 7 :/:
-
-infixl 8 :^:
-
 data Expression a
   = Val a
   | Var String
-  | Expression a :+: Expression a
-  | Expression a :-: Expression a
-  | Expression a :*: Expression a
-  | Expression a :/: Expression a
+  | Add (Expression a) (Expression a)
+  | Subtract (Expression a) (Expression a)
+  | Multyply (Expression a) (Expression a)
+  | Divide (Expression a) (Expression a)
   | Negative (Expression a)
   | Identical (Expression a)
-  | Expression a :^: Expression a
+  | Power (Expression a) (Expression a)
 
-evalExpression :: (Integral a, Fractional a) => Expression a -> a
+evalExpression :: (Floating a) => Expression a -> a
 evalExpression (Var _) = 0 -- todo
 evalExpression (Val x) = x
 evalExpression (Negative x) = -(evalExpression x)
 evalExpression (Identical x) = evalExpression x
-evalExpression (x :-: y) = evalExpression x - evalExpression y
-evalExpression (x :+: y) = evalExpression x + evalExpression y
-evalExpression (x :*: y) = evalExpression x * evalExpression y
-evalExpression (x :/: y) = evalExpression x / evalExpression y
-evalExpression (x :^: y) = evalExpression x ^ evalExpression y
+evalExpression (Add x y) = evalExpression x + evalExpression y
+evalExpression (Subtract x y) = evalExpression x - evalExpression y
+evalExpression (Multyply x y) = evalExpression x * evalExpression y
+evalExpression (Divide x y) = evalExpression x / evalExpression y
+evalExpression (Power x y) = evalExpression x ** evalExpression y
 
 instance (Show a) => Show (Expression a) where
   show (Val x) = show x
   show (Var n) = show n
   show (Negative x) = "-" ++ show x
   show (Identical x) = show x
-  show (x :-: y) = show x ++ " - " ++ show y
-  show (x :+: y) = show x ++ " + " ++ show y
-  show (x :*: y) = show x ++ " * " ++ show y
-  show (x :/: y) = show x ++ " / " ++ show y
-  show (x :^: y) = show x ++ " ^ " ++ show y
+  show (Add x y) = "(" ++ show x ++ " + " ++ show y ++ ")"
+  show (Subtract x y) = "(" ++ show x ++ " - " ++ show y ++ ")"
+  show (Multyply x y) = "(" ++ show x ++ " * " ++ show y ++ ")"
+  show (Divide x y) = "(" ++ show x ++ " / " ++ show y ++ ")"
+  show (Power x y) = "(" ++ show x ++ " ^ " ++ show y ++ ")"
 
 type ExprD = Expression Double
 
@@ -80,7 +72,7 @@ symbol :: Text -> Parser Text
 symbol = L.symbol sc
 
 double :: Parser Double
-double = L.signed sc (lexeme L.float)
+double = lexeme L.float
 
 pVariable :: Parser ExprD
 pVariable =
@@ -110,11 +102,13 @@ operatorTable =
   [ [ prefix "-" Negative,
       prefix "+" Identical
     ],
-    [ binary "*" (*),
-      binary "/" (/)
+    [ binary "^" Power
     ],
-    [ binary "+" (+),
-      binary "-" (-)
+    [ binary "*" Multyply,
+      binary "/" Divide
+    ],
+    [ binary "+" Add,
+      binary "-" Subtract
     ]
   ]
 
@@ -125,6 +119,11 @@ prefix, postfix :: Text -> (ExprD -> ExprD) -> E.Operator Parser ExprD
 prefix name f = E.Prefix (f <$ symbol name)
 postfix name f = E.Postfix (f <$ symbol name)
 
-parceExpression :: (Read a, Bounded a) => String -> Expression a
-parceExpression str = do
-  Val (read str) :+: Val maxBound
+data ParseException = ParseException deriving (Show)
+
+instance Exception ParseException
+
+parseExpression :: Text -> ExprD
+parseExpression s = case parse (pExpr <* eof) "" s of
+  Left _ -> throw ParseException
+  Right x -> x
