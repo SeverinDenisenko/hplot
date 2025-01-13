@@ -45,12 +45,23 @@ library:
 
 executables:
   hplot-exe:
-    main:                Main.hs
+    main:                Notebook.hs
     source-dirs:         app
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -main-is Notebook
+    dependencies:
+    - hplot
+  hplot-script-exe:
+    main:                Script.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -main-is Script
     dependencies:
     - hplot
 

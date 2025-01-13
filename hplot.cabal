@@ -45,14 +45,37 @@ library
   default-language: Haskell2010
 
 executable hplot-exe
-  main-is: Main.hs
+  main-is: Notebook.hs
   other-modules:
+      Script
       Paths_hplot
   autogen-modules:
       Paths_hplot
   hs-source-dirs:
       app
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -main-is Notebook
+  build-depends:
+      base >=4.7 && <5
+    , hplot
+    , lens
+    , megaparsec
+    , monomer >=1.6.0.1
+    , parser-combinators
+    , scientific
+    , text
+    , text-show
+  default-language: Haskell2010
+
+executable hplot-script-exe
+  main-is: Script.hs
+  other-modules:
+      Notebook
+      Paths_hplot
+  autogen-modules:
+      Paths_hplot
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -main-is Script
   build-depends:
       base >=4.7 && <5
     , hplot

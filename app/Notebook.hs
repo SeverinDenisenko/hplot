@@ -1,22 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Main (main) where
+module Notebook (main) where
 
+import Control.Exception (catch)
+import Control.Exception.Base
 import Control.Lens
 import Data.Text (Text, pack)
 import Expression
 import Monomer
-import TextShow
 
-runCalculation :: Text -> Text
+runCalculation :: Text -> IO Text
 runCalculation i = do
   let expr = parseExpression i
   let calced = evalExpression expr
-  pack (show calced)
+  return (pack (show calced))
+
+runCalculationSafe :: Text -> IO Text
+runCalculationSafe i = do
+  catch (runCalculation i) handler
+  where
+    handler :: SomeException -> IO Text
+    handler e = return (pack (show e))
 
 data Calculation = Calculation
-  { _ts :: Millisecond,
+  { _ts_begin :: Millisecond,
+    _ts_end :: Millisecond,
     _input :: Text,
     _output :: Text
   }
@@ -30,7 +39,8 @@ data AppModel = AppModel
 
 data AppEvent
   = AppInit
-  | AddCalculation
+  | StartCalculation Text Millisecond
+  | FinishCalculation Calculation
   | RemoveCalculation Int
   deriving (Eq, Show)
 
@@ -51,21 +61,22 @@ buildUI wenv model = widgetTree
             [ textField_ (calculations . singular (ix idx) . output) [readOnly],
               spacer,
               button "Delete" (RemoveCalculation idx)
-            ]
+            ],
+          spacer,
+          label_ (pack (show (calculation ^. ts_end - calculation ^. ts_begin) ++ " ms")) [ellipsis] `styleBasic` [textSize 12, paddingH 8]
         ]
-        `nodeKey` showt (calculation ^. ts)
         `styleBasic` [paddingT 10]
 
     widgetTree =
       vstack
-        [ keystroke [("Enter", AddCalculation)] $
+        [ keystroke [("Enter", StartCalculation (model ^. newCalculationInput) (currentTimeMs wenv))] $
             hstack
               [ label "In:",
                 spacer,
                 textField_ newCalculationInput [placeholder "Type here..."]
                   `nodeKey` "In:",
                 spacer,
-                button "Run" AddCalculation
+                button "Run" (StartCalculation (model ^. newCalculationInput) (currentTimeMs wenv))
                   `styleBasic` [paddingH 5]
                   `nodeEnabled` (model ^. newCalculationInput /= "")
               ],
@@ -82,24 +93,26 @@ handleEvent ::
   [AppEventResponse AppModel AppEvent]
 handleEvent wenv node model evt = case evt of
   AppInit -> []
-  AddCalculation
+  StartCalculation text begin
     | model ^. newCalculationInput /= "" ->
-        [ Model $
-            model
-              & newCalculationInput .~ ""
-              & calculations .~ newCalculation : model ^. calculations,
-          SetFocusOnKey "In:"
+        [ Model $ model & newCalculationInput .~ "",
+          SetFocusOnKey "In:",
+          Task $ beginCalculations wenv text begin
         ]
   RemoveCalculation idx ->
     [ Model $
         model
           & calculations .~ removeIdx idx (model ^. calculations)
     ]
+  FinishCalculation calc ->
+    [ Model $ model & calculations .~ calc : model ^. calculations
+    ]
   _ -> []
   where
-    newCalculation = do
-      let user_input = model ^. newCalculationInput
-      Calculation (currentTimeMs wenv) user_input (runCalculation user_input)
+    beginCalculations :: WidgetEnv AppModel AppEvent -> Text -> Millisecond -> IO AppEvent
+    beginCalculations wenv user_input begin = do
+      caclulation_result <- runCalculationSafe user_input
+      return (FinishCalculation (Calculation begin (currentTimeMs wenv) user_input caclulation_result))
 
 removeIdx :: Int -> [a] -> [a]
 removeIdx idx lst = part1 ++ drop 1 part2

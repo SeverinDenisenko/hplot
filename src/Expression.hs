@@ -2,6 +2,7 @@
 
 module Expression
   ( Expression (..),
+    ExprDouble,
     evalExpression,
     parseExpression,
     evalFunction,
@@ -47,7 +48,7 @@ getVariable n m = do
     else
       snd (head filtered)
 
-evalExpression :: (Floating a) =>Expression a -> a
+evalExpression :: (Floating a) => Expression a -> a
 evalExpression (Variable _) = throw EvaluationExceptionArgumentsAreNotAllowed
 evalExpression (ValueReal x) = x
 evalExpression (ValueInteger x) = fromInteger x
