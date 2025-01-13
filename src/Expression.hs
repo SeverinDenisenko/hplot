@@ -30,21 +30,13 @@ data Expression a
   | Identical (Expression a)
   | Power (Expression a) (Expression a)
 
-evalExpression :: (Floating a) =>Expression a -> a
-evalExpression (Variable _) = 0 -- todo
-evalExpression (ValueReal x) = x
-evalExpression (ValueInteger x) = fromInteger x
-evalExpression (Negative x) = -(evalExpression x)
-evalExpression (Identical x) = evalExpression x
-evalExpression (Add x y) = evalExpression x + evalExpression y
-evalExpression (Subtract x y) = evalExpression x - evalExpression y
-evalExpression (Multyply x y) = evalExpression x * evalExpression y
-evalExpression (Divide x y) = evalExpression x / evalExpression y
-evalExpression (Power x y) = evalExpression x ** evalExpression y
-
 data EvaluationExceptionArgumentNotFound = EvaluationExceptionArgumentNotFound deriving (Show)
 
 instance Exception EvaluationExceptionArgumentNotFound
+
+data EvaluationExceptionArgumentsAreNotAllowed = EvaluationExceptionArgumentsAreNotAllowed deriving (Show)
+
+instance Exception EvaluationExceptionArgumentsAreNotAllowed
 
 getVariable :: String -> [(String, a)] -> a
 getVariable n m = do
@@ -54,6 +46,18 @@ getVariable n m = do
       throw EvaluationExceptionArgumentNotFound
     else
       snd (head filtered)
+
+evalExpression :: (Floating a) =>Expression a -> a
+evalExpression (Variable _) = throw EvaluationExceptionArgumentsAreNotAllowed
+evalExpression (ValueReal x) = x
+evalExpression (ValueInteger x) = fromInteger x
+evalExpression (Negative x) = -(evalExpression x)
+evalExpression (Identical x) = evalExpression x
+evalExpression (Add x y) = evalExpression x + evalExpression y
+evalExpression (Subtract x y) = evalExpression x - evalExpression y
+evalExpression (Multyply x y) = evalExpression x * evalExpression y
+evalExpression (Divide x y) = evalExpression x / evalExpression y
+evalExpression (Power x y) = evalExpression x ** evalExpression y
 
 evalFunction :: (Floating a) => Expression a -> [(String, a)] -> a
 evalFunction (Variable n) m = getVariable n m

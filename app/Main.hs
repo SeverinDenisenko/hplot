@@ -4,29 +4,37 @@
 module Main (main) where
 
 import Control.Lens
-import Data.Text (Text)
+import Data.Text (Text, pack)
+import Expression
 import Monomer
 import TextShow
 
-data ListItem = ListItem
+runCalculation :: Text -> Text
+runCalculation i = do
+  let expr = parseExpression i
+  let calced = evalExpression expr
+  pack (show calced)
+
+data Calculation = Calculation
   { _ts :: Millisecond,
-    _text :: Text
+    _input :: Text,
+    _output :: Text
   }
   deriving (Eq, Show)
 
 data AppModel = AppModel
-  { _newItemText :: Text,
-    _items :: [ListItem]
+  { _newCalculationInput :: Text,
+    _calculations :: [Calculation]
   }
   deriving (Eq, Show)
 
 data AppEvent
   = AppInit
-  | AddItem
-  | RemoveItem Int
+  | AddCalculation
+  | RemoveCalculation Int
   deriving (Eq, Show)
 
-makeLenses 'ListItem
+makeLenses 'Calculation
 makeLenses 'AppModel
 
 buildUI ::
@@ -35,34 +43,34 @@ buildUI ::
   WidgetNode AppModel AppEvent
 buildUI wenv model = widgetTree
   where
-    listItem idx item =
+    listCalculations idx calculation =
       vstack
-        [ label_ (item ^. text) [ellipsis] `styleBasic` [textSize 12, paddingH 8],
+        [ label_ (calculation ^. input) [ellipsis] `styleBasic` [textSize 12, paddingH 8],
           spacer,
           hstack
-            [ textField (items . singular (ix idx) . text),
+            [ textField_ (calculations . singular (ix idx) . output) [readOnly],
               spacer,
-              button "Delete" (RemoveItem idx)
+              button "Delete" (RemoveCalculation idx)
             ]
         ]
-        `nodeKey` showt (item ^. ts)
+        `nodeKey` showt (calculation ^. ts)
         `styleBasic` [paddingT 10]
 
     widgetTree =
       vstack
-        [ keystroke [("Enter", AddItem)] $
+        [ keystroke [("Enter", AddCalculation)] $
             hstack
-              [ label "Description:",
+              [ label "In:",
                 spacer,
-                textField_ newItemText [placeholder "Write here!"]
-                  `nodeKey` "description",
+                textField_ newCalculationInput [placeholder "Type here..."]
+                  `nodeKey` "In:",
                 spacer,
-                button "Add" AddItem
+                button "Run" AddCalculation
                   `styleBasic` [paddingH 5]
-                  `nodeEnabled` (model ^. newItemText /= "")
+                  `nodeEnabled` (model ^. newCalculationInput /= "")
               ],
           separatorLine `styleBasic` [paddingT 20, paddingB 10],
-          vstack (zipWith listItem [0 ..] (model ^. items))
+          vstack (zipWith listCalculations [0 ..] (model ^. calculations))
         ]
         `styleBasic` [padding 20]
 
@@ -74,22 +82,24 @@ handleEvent ::
   [AppEventResponse AppModel AppEvent]
 handleEvent wenv node model evt = case evt of
   AppInit -> []
-  AddItem
-    | model ^. newItemText /= "" ->
+  AddCalculation
+    | model ^. newCalculationInput /= "" ->
         [ Model $
             model
-              & newItemText .~ ""
-              & items .~ newItem : model ^. items,
-          SetFocusOnKey "description"
+              & newCalculationInput .~ ""
+              & calculations .~ newCalculation : model ^. calculations,
+          SetFocusOnKey "In:"
         ]
-  RemoveItem idx ->
+  RemoveCalculation idx ->
     [ Model $
         model
-          & items .~ removeIdx idx (model ^. items)
+          & calculations .~ removeIdx idx (model ^. calculations)
     ]
   _ -> []
   where
-    newItem = ListItem (currentTimeMs wenv) (model ^. newItemText)
+    newCalculation = do
+      let user_input = model ^. newCalculationInput
+      Calculation (currentTimeMs wenv) user_input (runCalculation user_input)
 
 removeIdx :: Int -> [a] -> [a]
 removeIdx idx lst = part1 ++ drop 1 part2
@@ -101,14 +111,14 @@ main = do
   startApp model handleEvent buildUI config
   where
     config =
-      [ appWindowTitle "Tutorial 03 - Merging",
-        appWindowIcon "./assets/images/icon.png",
+      [ appWindowTitle "HPlot",
+        appWindowIcon "./assets/icons/icon.png",
         appTheme darkTheme,
         appFontDef "Regular" "./assets/fonts/Roboto-Regular.ttf",
         appInitEvent AppInit
       ]
     model =
       AppModel
-        { _newItemText = "",
-          _items = []
+        { _newCalculationInput = "",
+          _calculations = []
         }
