@@ -27,6 +27,7 @@ dependencies:
 - lens
 - megaparsec
 - parser-combinators
+- scientific
 
 ghc-options:
 - -Wall

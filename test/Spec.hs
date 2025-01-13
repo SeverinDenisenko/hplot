@@ -1,6 +1,6 @@
 import Expression
-import Data.Text
 import System.Exit
+import Data.Text
 
 testEpr :: String -> Double -> IO ()
 testEpr expr res = do
@@ -23,6 +23,8 @@ testFunc expr m res = do
 main :: IO ()
 main = do
     testEpr "2.0" 2.0
+    testEpr "2" 2.0
+    testEpr "22" 22
     testEpr "2.0 * 2.0" 4.0
     testEpr "2.0 + 2.0" 4.0
     testEpr "2.0 * 2.0 + (1.0 * 3.5) ^ 2.0 - 2.0" 14.25

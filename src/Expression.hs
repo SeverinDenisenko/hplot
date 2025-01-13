@@ -1,17 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Expression
   ( Expression (..),
     evalExpression,
     parseExpression,
-    evalFunction
+    evalFunction,
   )
 where
 
 import Control.Exception (throw)
 import Control.Exception.Base (Exception)
 import qualified Control.Monad.Combinators.Expr as E
+import Data.Data (Typeable)
 import Data.Text (Text)
 import Data.Void
 import Text.Megaparsec hiding (State)
@@ -19,7 +19,8 @@ import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
 data Expression a
-  = Value a
+  = ValueReal a
+  | ValueInteger Integer
   | Variable String
   | Add (Expression a) (Expression a)
   | Subtract (Expression a) (Expression a)
@@ -29,9 +30,10 @@ data Expression a
   | Identical (Expression a)
   | Power (Expression a) (Expression a)
 
-evalExpression :: (Floating a) => Expression a -> a
+evalExpression :: (Floating a) =>Expression a -> a
 evalExpression (Variable _) = 0 -- todo
-evalExpression (Value x) = x
+evalExpression (ValueReal x) = x
+evalExpression (ValueInteger x) = fromInteger x
 evalExpression (Negative x) = -(evalExpression x)
 evalExpression (Identical x) = evalExpression x
 evalExpression (Add x y) = evalExpression x + evalExpression y
@@ -40,31 +42,34 @@ evalExpression (Multyply x y) = evalExpression x * evalExpression y
 evalExpression (Divide x y) = evalExpression x / evalExpression y
 evalExpression (Power x y) = evalExpression x ** evalExpression y
 
-data EvaluationException = EvaluationException deriving (Show)
+data EvaluationExceptionArgumentNotFound = EvaluationExceptionArgumentNotFound deriving (Show)
 
-instance Exception EvaluationException
+instance Exception EvaluationExceptionArgumentNotFound
 
-getVariable :: String -> [(String,a)] -> a
+getVariable :: String -> [(String, a)] -> a
 getVariable n m = do
-  let filtered = filter (\(x, _) -> x == n) m 
-  if null filtered then
-    throw EvaluationException
-  else
-    snd (head filtered)
+  let filtered = filter (\(x, _) -> x == n) m
+  if null filtered
+    then
+      throw EvaluationExceptionArgumentNotFound
+    else
+      snd (head filtered)
 
-evalFunction :: (Floating a) => Expression a -> [(String,a)] -> a
+evalFunction :: (Floating a) => Expression a -> [(String, a)] -> a
 evalFunction (Variable n) m = getVariable n m
-evalFunction (Value x) _ = x
+evalFunction (ValueReal x) _ = x
+evalFunction (ValueInteger x) _ = fromInteger x
 evalFunction (Negative x) m = -(evalFunction x m)
 evalFunction (Identical x) m = evalFunction x m
-evalFunction (Add x y) m = (evalFunction x m) + (evalFunction y m)
-evalFunction (Subtract x y) m = (evalFunction x m) - (evalFunction y m)
-evalFunction (Multyply x y) m = (evalFunction x m) * (evalFunction y m)
-evalFunction (Divide x y) m = (evalFunction x m) / (evalFunction y m)
-evalFunction (Power x y) m = (evalFunction x m) ** (evalFunction y m)
+evalFunction (Add x y) m = evalFunction x m + evalFunction y m
+evalFunction (Subtract x y) m = evalFunction x m - evalFunction y m
+evalFunction (Multyply x y) m = evalFunction x m * evalFunction y m
+evalFunction (Divide x y) m = evalFunction x m / evalFunction y m
+evalFunction (Power x y) m = evalFunction x m ** evalFunction y m
 
 instance (Show a) => Show (Expression a) where
-  show (Value x) = show x
+  show (ValueReal x) = show x
+  show (ValueInteger x) = show x
   show (Variable n) = n
   show (Negative x) = "-" ++ show x
   show (Identical x) = show x
@@ -74,7 +79,7 @@ instance (Show a) => Show (Expression a) where
   show (Divide x y) = "(" ++ show x ++ " / " ++ show y ++ ")"
   show (Power x y) = "(" ++ show x ++ " ^ " ++ show y ++ ")"
 
-type ExprD = Expression Double
+type ExprDouble = Expression Double
 
 -- Parsing
 
@@ -96,30 +101,39 @@ symbol = L.symbol sc
 double :: Parser Double
 double = lexeme L.float
 
-pVariable :: Parser ExprD
+integer :: Parser Integer
+integer = lexeme L.decimal
+
+pVariable :: Parser ExprDouble
 pVariable =
   Variable
     <$> lexeme
       ((:) <$> letterChar <*> many alphaNumChar <?> "variable")
 
-pDouble :: Parser ExprD
-pDouble = Value <$> lexeme double
+pReal :: Parser ExprDouble
+pReal = ValueReal <$> lexeme double
+
+pInteger :: Parser ExprDouble
+pInteger = ValueInteger <$> lexeme integer
+
+pValue :: Parser ExprDouble
+pValue = try pReal <|> pInteger
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
-pTerm :: Parser ExprD
+pTerm :: Parser ExprDouble
 pTerm =
   choice
     [ parens pExpr,
       pVariable,
-      pDouble
+      pValue
     ]
 
-pExpr :: Parser ExprD
+pExpr :: Parser ExprDouble
 pExpr = E.makeExprParser pTerm operatorTable
 
-operatorTable :: [[E.Operator Parser ExprD]]
+operatorTable :: [[E.Operator Parser ExprDouble]]
 operatorTable =
   [ [ prefix "-" Negative,
       prefix "+" Identical
@@ -134,18 +148,18 @@ operatorTable =
     ]
   ]
 
-binary :: Text -> (ExprD -> ExprD -> ExprD) -> E.Operator Parser ExprD
+binary :: Text -> (ExprDouble -> ExprDouble -> ExprDouble) -> E.Operator Parser ExprDouble
 binary name f = E.InfixL (f <$ symbol name)
 
-prefix, postfix :: Text -> (ExprD -> ExprD) -> E.Operator Parser ExprD
+prefix, postfix :: Text -> (ExprDouble -> ExprDouble) -> E.Operator Parser ExprDouble
 prefix name f = E.Prefix (f <$ symbol name)
 postfix name f = E.Postfix (f <$ symbol name)
 
-data ParseException = ParseException deriving (Show)
+newtype ParseException = ParseException String deriving (Eq, Show, Typeable)
 
 instance Exception ParseException
 
-parseExpression :: Text -> ExprD
+parseExpression :: Text -> ExprDouble
 parseExpression s = case parse (pExpr <* eof) "" s of
-  Left _ -> throw ParseException
+  Left e -> throw e
   Right x -> x
