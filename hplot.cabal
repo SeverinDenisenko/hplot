@@ -69,6 +69,7 @@ test-suite hplot-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      TestExpression
       Paths_hplot
   autogen-modules:
       Paths_hplot
