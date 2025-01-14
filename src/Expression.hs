@@ -10,7 +10,7 @@ module Expression
     parseStatement,
     substituteFunctions,
     FunctionDouble,
-    ExpressionDouble
+    ExpressionDouble,
   )
 where
 
@@ -150,7 +150,13 @@ parseExpression s = case parse (pExpr <* eof) "" s of
 
 -- Functions
 
-data Function a = Function String (Expression a) deriving Show
+data Function a = Function String (Expression a)
+
+instance (Show a) => Show (Function a) where
+  show (Function name expr) = name ++ " = " ++ show expr
+
+instance Eq (Function a) where
+  (Function n1 _) == (Function n2 _) = n1 == n2
 
 substituteExpressions :: Expression a -> Expression a -> String -> Expression a
 substituteExpressions (Variable v) sub_expr sub_name

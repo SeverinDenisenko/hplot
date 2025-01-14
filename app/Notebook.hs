@@ -10,18 +10,29 @@ import Data.Text (Text, pack)
 import Expression
 import Monomer
 
-runCalculation :: Text -> IO Text
-runCalculation i = do
-  let expr = parseExpression i
-  let calced = evalExpression expr
-  return (pack (show calced))
-
-runCalculationSafe :: Text -> IO Text
-runCalculationSafe i = do
-  catch (runCalculation i) handler
+runCalculation :: Text -> [FunctionDouble] -> IO ([FunctionDouble], Text)
+runCalculation i context = do
+  let parsed = parseStatement i
+  case parsed of
+    Left expression -> makeEvaluation expression context
+    Right function -> makeSubst function context
   where
-    handler :: SomeException -> IO Text
-    handler e = return (pack (show e))
+    makeSubst :: FunctionDouble -> [FunctionDouble] -> IO ([FunctionDouble], Text)
+    makeSubst function execution_context = do
+      let subst = substituteFunctions function execution_context
+      return (subst : context, pack (show subst))
+    makeEvaluation :: ExpressionDouble -> [FunctionDouble] -> IO ([FunctionDouble], Text)
+    makeEvaluation expr execution_context = do
+      let (Function _ subst) = substituteFunctions (Function "" expr) execution_context
+      let calced = evalFunction subst execution_context
+      return (context, pack (show calced))
+
+runCalculationSafe :: Text -> [FunctionDouble] -> IO ([FunctionDouble], Text)
+runCalculationSafe i context = do
+  catch (runCalculation i context) handler
+  where
+    handler :: SomeException -> IO ([FunctionDouble], Text)
+    handler e = return (context, pack (show e))
 
 data Calculation = Calculation
   { _ts_begin :: Millisecond,
@@ -33,14 +44,15 @@ data Calculation = Calculation
 
 data AppModel = AppModel
   { _newCalculationInput :: Text,
-    _calculations :: [Calculation]
+    _calculations :: [Calculation],
+    _evaluationContext :: [FunctionDouble]
   }
   deriving (Eq, Show)
 
 data AppEvent
   = AppInit
   | StartCalculation Text Millisecond
-  | FinishCalculation Calculation
+  | FinishCalculation Calculation [FunctionDouble]
   | RemoveCalculation Int
   deriving (Eq, Show)
 
@@ -97,22 +109,22 @@ handleEvent wenv node model evt = case evt of
     | model ^. newCalculationInput /= "" ->
         [ Model $ model & newCalculationInput .~ "",
           SetFocusOnKey "In:",
-          Task $ beginCalculations wenv text begin
+          Task $ beginCalculations wenv text begin (model ^. evaluationContext)
         ]
   RemoveCalculation idx ->
     [ Model $
         model
           & calculations .~ removeIdx idx (model ^. calculations)
     ]
-  FinishCalculation calc ->
-    [ Model $ model & calculations .~ calc : model ^. calculations
+  FinishCalculation calc new_context ->
+    [ Model $ model & calculations .~ calc : model ^. calculations & evaluationContext .~ new_context
     ]
   _ -> []
   where
-    beginCalculations :: WidgetEnv AppModel AppEvent -> Text -> Millisecond -> IO AppEvent
-    beginCalculations env user_input begin = do
-      caclulation_result <- runCalculationSafe user_input
-      return (FinishCalculation (Calculation begin (currentTimeMs env) user_input caclulation_result))
+    beginCalculations :: WidgetEnv AppModel AppEvent -> Text -> Millisecond -> [FunctionDouble] -> IO AppEvent
+    beginCalculations env user_input begin context = do
+      (new_context, caclulation_result) <- runCalculationSafe user_input context
+      return (FinishCalculation (Calculation begin (currentTimeMs env) user_input caclulation_result) new_context)
 
 removeIdx :: Int -> [a] -> [a]
 removeIdx idx lst = part1 ++ drop 1 part2
@@ -133,5 +145,6 @@ main = do
     model =
       AppModel
         { _newCalculationInput = "",
-          _calculations = []
+          _calculations = [],
+          _evaluationContext = []
         }

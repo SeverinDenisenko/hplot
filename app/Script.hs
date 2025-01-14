@@ -9,7 +9,7 @@ import Expression
 runCalculation :: String -> [FunctionDouble] -> IO (String, [FunctionDouble])
 runCalculation i execution_context = do
   let parsed = parseStatement (pack i)
-  case (parsed) of
+  case parsed of
     Left expression -> makeEvaluation expression execution_context
     Right function -> makeSubst function execution_context
   where
