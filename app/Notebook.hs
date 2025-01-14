@@ -110,9 +110,9 @@ handleEvent wenv node model evt = case evt of
   _ -> []
   where
     beginCalculations :: WidgetEnv AppModel AppEvent -> Text -> Millisecond -> IO AppEvent
-    beginCalculations wenv user_input begin = do
+    beginCalculations env user_input begin = do
       caclulation_result <- runCalculationSafe user_input
-      return (FinishCalculation (Calculation begin (currentTimeMs wenv) user_input caclulation_result))
+      return (FinishCalculation (Calculation begin (currentTimeMs env) user_input caclulation_result))
 
 removeIdx :: Int -> [a] -> [a]
 removeIdx idx lst = part1 ++ drop 1 part2
