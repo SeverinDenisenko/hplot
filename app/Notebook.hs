@@ -1,14 +1,16 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Notebook (main) where
 
 import Control.Exception (catch)
-import Control.Exception.Base
 import Control.Lens
 import Data.Text (Text, pack)
 import Expression
 import Monomer
+import Control.Exception.Base (SomeException(..))
 
 runCalculation :: Text -> [FunctionDouble] -> IO ([FunctionDouble], Text)
 runCalculation i context = do
@@ -29,10 +31,12 @@ runCalculation i context = do
 
 runCalculationSafe :: Text -> [FunctionDouble] -> IO ([FunctionDouble], Text)
 runCalculationSafe i context = do
-  catch (runCalculation i context) handler
-  where
-    handler :: SomeException -> IO ([FunctionDouble], Text)
-    handler e = return (context, pack (show e))
+  catch
+    (runCalculation i context)
+    ( \case
+        SomeException e ->
+          return (context, pack (show e))
+    )
 
 data Calculation = Calculation
   { _ts_begin :: Millisecond,

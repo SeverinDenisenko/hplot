@@ -11,6 +11,9 @@ module Expression
     substituteFunctions,
     FunctionDouble,
     ExpressionDouble,
+    EvaluationExceptionArgumentNotFound(..),
+    EvaluationExceptionArgumentsAreNotAllowed(..),
+    ParseException(..)
   )
 where
 
@@ -143,9 +146,13 @@ prefix, postfix :: Text -> (ExpressionDouble -> ExpressionDouble) -> E.Operator 
 prefix name f = E.Prefix (f <$ symbol name)
 postfix name f = E.Postfix (f <$ symbol name)
 
+data ParseException = ParseException deriving (Show)
+
+instance Exception ParseException
+
 parseExpression :: Text -> ExpressionDouble
 parseExpression s = case parse (pExpr <* eof) "" s of
-  Left e -> throw e
+  Left _ -> throw ParseException
   Right x -> x
 
 -- Functions
@@ -212,7 +219,7 @@ pFunction = do
 
 parseFunction :: Text -> FunctionDouble
 parseFunction s = case parse (pFunction <* eof) "" s of
-  Left e -> throw e
+  Left _ -> throw ParseException
   Right x -> x
 
 pStatement :: Parser (Either ExpressionDouble FunctionDouble)
@@ -225,5 +232,5 @@ pStatement = try pFunctionW <|> pExprW
 
 parseStatement :: Text -> Either ExpressionDouble FunctionDouble
 parseStatement s = case parse (pStatement <* eof) "" s of
-  Left e -> throw e
+  Left _ -> throw ParseException
   Right x -> x
