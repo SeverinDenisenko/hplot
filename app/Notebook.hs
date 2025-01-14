@@ -5,12 +5,12 @@
 
 module Notebook (main) where
 
-import Control.Exception (catch)
+import Control.Exception (catch, try)
+import Control.Exception.Base (SomeException (..))
 import Control.Lens
 import Data.Text (Text, pack)
 import Expression
 import Monomer
-import Control.Exception.Base (SomeException(..))
 
 runCalculation :: Text -> [FunctionDouble] -> IO ([FunctionDouble], Text)
 runCalculation i context = do
@@ -27,16 +27,16 @@ runCalculation i context = do
     makeEvaluation expr execution_context = do
       let (Function _ subst) = substituteFunctions (Function "" expr) execution_context
       let calced = evalFunction subst execution_context
-      return (context, pack (show calced))
+      case calced of
+        Left value -> return (context, pack (show value))
+        Right err -> return (context, pack (show err))
 
 runCalculationSafe :: Text -> [FunctionDouble] -> IO ([FunctionDouble], Text)
 runCalculationSafe i context = do
-  catch
-    (runCalculation i context)
-    ( \case
-        SomeException e ->
-          return (context, pack (show e))
-    )
+  calculation_result <- try (runCalculation i context) :: IO (Either SomeException ([FunctionDouble], Text))
+  case calculation_result of
+    Left e -> return (context, pack (show e)) 
+    Right r -> return r
 
 data Calculation = Calculation
   { _ts_begin :: Millisecond,

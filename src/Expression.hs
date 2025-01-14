@@ -3,7 +3,6 @@
 module Expression
   ( Expression (..),
     Function (..),
-    evalExpression,
     evalFunction,
     parseExpression,
     parseFunction,
@@ -11,9 +10,8 @@ module Expression
     substituteFunctions,
     FunctionDouble,
     ExpressionDouble,
-    EvaluationExceptionArgumentNotFound(..),
-    EvaluationExceptionArgumentsAreNotAllowed(..),
-    ParseException(..)
+    ExpressionError (..),
+    ParseException (..),
   )
 where
 
@@ -37,26 +35,7 @@ data Expression a
   | Negative (Expression a)
   | Identical (Expression a)
   | Power (Expression a) (Expression a)
-
-data EvaluationExceptionArgumentNotFound = EvaluationExceptionArgumentNotFound deriving (Show)
-
-instance Exception EvaluationExceptionArgumentNotFound
-
-data EvaluationExceptionArgumentsAreNotAllowed = EvaluationExceptionArgumentsAreNotAllowed deriving (Show)
-
-instance Exception EvaluationExceptionArgumentsAreNotAllowed
-
-evalExpression :: (Floating a) => Expression a -> a
-evalExpression (Variable _) = throw EvaluationExceptionArgumentsAreNotAllowed
-evalExpression (ValueReal x) = x
-evalExpression (ValueInteger x) = fromInteger x
-evalExpression (Negative x) = -(evalExpression x)
-evalExpression (Identical x) = evalExpression x
-evalExpression (Add x y) = evalExpression x + evalExpression y
-evalExpression (Subtract x y) = evalExpression x - evalExpression y
-evalExpression (Multyply x y) = evalExpression x * evalExpression y
-evalExpression (Divide x y) = evalExpression x / evalExpression y
-evalExpression (Power x y) = evalExpression x ** evalExpression y
+  | InternalFunction String (a -> a) (Expression a)
 
 instance (Show a) => Show (Expression a) where
   show (ValueReal x) = show x
@@ -69,6 +48,7 @@ instance (Show a) => Show (Expression a) where
   show (Multyply x y) = "(" ++ show x ++ " * " ++ show y ++ ")"
   show (Divide x y) = "(" ++ show x ++ " / " ++ show y ++ ")"
   show (Power x y) = "(" ++ show x ++ " ^ " ++ show y ++ ")"
+  show (InternalFunction n _ e) = n ++ "(" ++ show e ++ ")"
 
 type ExpressionDouble = Expression Double
 
@@ -179,28 +159,55 @@ substituteFunctions (Function name expr) ((Function sub_name sub_expr) : ss) = d
 
 type FunctionDouble = Function Double
 
-getFunction :: String -> [Function a] -> Function a
+data ExpressionError = ExpressionErrorArgumentNotFound | ExpressionErrorAtithmeticError deriving (Show)
+
+getFunction :: String -> [Function a] -> Either (Function a) ExpressionError
 getFunction n m = do
   let filtered = filter (\(Function k _) -> k == n) m
   if null filtered
     then
-      throw EvaluationExceptionArgumentNotFound
+      Right ExpressionErrorArgumentNotFound
     else
-      head filtered
+      Left (head filtered)
 
-evalFunction :: (Floating a) => Expression a -> [Function a] -> a
-evalFunction (Variable n) m = do
-  let (Function _ e) = getFunction n m
-  evalFunction e m
-evalFunction (ValueReal x) _ = x
-evalFunction (ValueInteger x) _ = fromInteger x
-evalFunction (Negative x) m = -(evalFunction x m)
+evalFunction :: (Floating a) => Expression a -> [Function a] -> Either a ExpressionError
+evalFunction (Variable n) m = case getFunction n m of
+  Left (Function _ e) -> evalFunction e m
+  Right err -> Right err
+evalFunction (ValueReal x) _ = Left x
+evalFunction (ValueInteger x) _ = Left (fromInteger x)
+evalFunction (Negative x) m = case evalFunction x m of
+  Left result -> Left (-result)
+  Right err -> Right err
 evalFunction (Identical x) m = evalFunction x m
-evalFunction (Add x y) m = evalFunction x m + evalFunction y m
-evalFunction (Subtract x y) m = evalFunction x m - evalFunction y m
-evalFunction (Multyply x y) m = evalFunction x m * evalFunction y m
-evalFunction (Divide x y) m = evalFunction x m / evalFunction y m
-evalFunction (Power x y) m = evalFunction x m ** evalFunction y m
+evalFunction (Add x y) m = case (evalFunction x m, evalFunction y m) of
+  (Left a, Left b) -> Left (a + b)
+  (Right e, Left _) -> Right e
+  (Left _, Right e) -> Right e
+  (Right e, Right _) -> Right e
+evalFunction (Subtract x y) m = case (evalFunction x m, evalFunction y m) of
+  (Left a, Left b) -> Left (a - b)
+  (Right e, Left _) -> Right e
+  (Left _, Right e) -> Right e
+  (Right e, Right _) -> Right e
+evalFunction (Multyply x y) m = case (evalFunction x m, evalFunction y m) of
+  (Left a, Left b) -> Left (a * b)
+  (Right e, Left _) -> Right e
+  (Left _, Right e) -> Right e
+  (Right e, Right _) -> Right e
+evalFunction (Divide x y) m = case (evalFunction x m, evalFunction y m) of
+  (Left a, Left b) -> Left (a / b)
+  (Right e, Left _) -> Right e
+  (Left _, Right e) -> Right e
+  (Right e, Right _) -> Right e
+evalFunction (Power x y) m = case (evalFunction x m, evalFunction y m) of
+  (Left a, Left b) -> Left (a ** b)
+  (Right e, Left _) -> Right e
+  (Left _, Right e) -> Right e
+  (Right e, Right _) -> Right e
+evalFunction (InternalFunction _ f x) m = case evalFunction x m of
+  Left result -> Left (f result)
+  Right err -> Right err
 
 -- Parsing functions
 
