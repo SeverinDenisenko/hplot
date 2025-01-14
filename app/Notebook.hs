@@ -17,16 +17,11 @@ runCalculation i context = do
   let parsed = parseStatement i
   case parsed of
     Left expression -> makeEvaluation expression context
-    Right function -> makeSubst function context
+    Right function -> return (function : context, pack (show function))
   where
-    makeSubst :: FunctionDouble -> [FunctionDouble] -> IO ([FunctionDouble], Text)
-    makeSubst function execution_context = do
-      let subst = substituteFunctions function execution_context
-      return (subst : context, pack (show subst))
     makeEvaluation :: ExpressionDouble -> [FunctionDouble] -> IO ([FunctionDouble], Text)
     makeEvaluation expr execution_context = do
-      let (Function _ subst) = substituteFunctions (Function "" expr) execution_context
-      let calced = evalFunction subst execution_context
+      let calced = evalFunction expr execution_context
       case calced of
         Left value -> return (context, pack (show value))
         Right err -> return (context, pack (show err))
@@ -35,7 +30,7 @@ runCalculationSafe :: Text -> [FunctionDouble] -> IO ([FunctionDouble], Text)
 runCalculationSafe i context = do
   calculation_result <- try (runCalculation i context) :: IO (Either SomeException ([FunctionDouble], Text))
   case calculation_result of
-    Left e -> return (context, pack (show e)) 
+    Left e -> return (context, pack (show e))
     Right r -> return r
 
 data Calculation = Calculation
@@ -97,7 +92,12 @@ buildUI wenv model = widgetTree
                   `nodeEnabled` (model ^. newCalculationInput /= "")
               ],
           separatorLine `styleBasic` [paddingT 20, paddingB 10],
-          vstack (zipWith listCalculations [0 ..] (model ^. calculations))
+          vscroll
+            ( hstack
+                [ vstack (zipWith listCalculations [0 ..] (model ^. calculations)),
+                  spacer
+                ]
+            )
         ]
         `styleBasic` [padding 20]
 
